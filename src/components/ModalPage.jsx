@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, {useRef, useState} from "react";
 import uniqid from "uniqid";
 
 import styled from "styled-components";
@@ -17,10 +17,13 @@ const StyledWrapper = styled.div`
   }
 `;
 
+
+// TOD: поправить так, как сделаны табы  (VisibleTab)
 const StyledTabs = styled.div`
   width: 970px;
   margin-left: 30px;
   overflow: hidden;
+  scroll-behavior: smooth;
   .wrapper {
     /* transform: ${(props) => {
       const index = props.arr.map((iter) => iter.id).indexOf(props.tab);
@@ -79,16 +82,9 @@ const StyledCards = styled.ul`
     width: 100%;
     height: 650px;
     background-color: #fff;
-    &.${(props) => {
-        const index = props.arr.map((iter) => iter.id).indexOf(props.tab);
-        if (index === -1) {
-          return `tab0`;
-        }
-        return `tab${props.tab}`;
-      }} {
+    &.visibleTab {
       display: block;
     }
-  }
 `;
 
 const StyledAdd = styled.button`
@@ -100,7 +96,7 @@ const StyledAdd = styled.button`
   background-color: #fff;
   outline: none;
   margin-left: 10px;
-  box-shadow: 0px 0px 6px 4px rgb(255 255 255);
+  box-shadow: 0 0 6px 4px rgb(255 255 255);
 `;
 
 const StyledNav = styled.button`
@@ -135,25 +131,32 @@ const tabsArr2 = () => {
   return [{ id: uniqid(), value: `${uniqid()} tab` }];
 };
 
-export default function ModalPage({ setOpen }) {
-  const [tab, setTab] = useState(0);
-  const [arr, setArr] = useState(tabsArr);
+const scrollOptions = { behavior: "smooth", inline: "center", block:"center"}
 
+export default function ModalPage({ setOpen }) {
+  const [tabId, setTabId] = useState(0);
+  const [arr, setArr] = useState(tabsArr);
+  const t = useRef(null);
+  const m  = useRef(null);
   const tabHandle = (id) => {
-    setTab(id);
+      m.current.childNodes[arr.map(({id})=>id).indexOf(id)].scrollIntoView(scrollOptions)
+    setTabId(id);
   };
 
+
+
+
   const delHandle = (id) => {
-    if (tab === id) {
+    if (tabId === id) {
       if (arr.length <= 1) {
         setOpen(false);
         return;
       }
       const index = arr.map((iter) => iter.id).indexOf(id);
       if (index > 0) {
-        setTab(arr[index - 1].id);
+          setTabId(arr[index - 1].id);
       } else {
-        setTab(arr[index + 1].id);
+          setTabId(arr[index + 1].id);
       }
     }
 
@@ -161,23 +164,54 @@ export default function ModalPage({ setOpen }) {
     setArr(filterArr);
   };
 
+
+    const getRandomInt = (min, max) => {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min)) + min;
+    }
+
+  const onData = (data)=> {
+      if(data.data.length> arr.length) {
+          //Try to find new Element
+          const localIdMap = arr.map(id=>id)
+          const remoteIdMap  = data.data.map(id=>id)
+
+          const newId = remoteIdMap.filter(item=>localIdMap.indexOf(item) !== -1);
+          const lastFoundElementPosition = remoteIdMap.indexOf(newId[newId.length-1]);
+          setTimeout(()=>m.current.childNodes[lastFoundElementPosition].scrollIntoView(scrollOptions), 0)
+      }
+      setArr(data.data);
+console.log(data.currentPosition)
+      if(data.currentPosition){
+          setTabId(data.data[data.currentPosition].id)
+          setTimeout(()=>m.current.childNodes[data.currentPosition].scrollIntoView(scrollOptions), 0)
+      }
+
+  }
+
+
+
   return (
     <>
       <StyledWrapper>
-        <StyledTabs tab={tab} arr={arr}>
-          <div className="wrapper">
-            {arr.map((iter, count) => (
-              <li key={count.toString()} className={`tab${iter.id}`}>
+        <StyledTabs tab={tabId} arr={arr} ref={t} onWheel={(e)=> {
+            const spd = parseInt(e.nativeEvent.wheelDelta);
+            t.current.scrollLeft += e.nativeEvent.wheelDelta;
+        }}>
+          <div className="wrapper" ref={m}>
+            {arr.map((item, count) => (
+              <li key={count.toString()} className={`tab${item.id}`}>
                 <button
                   type="button"
-                  onClick={() => tabHandle(iter.id)}
+                  onClick={() => tabHandle(item.id)}
                   className="btn"
                 >
-                  {iter.value}
+                  {item.value}
                 </button>
                 <button
                   type="button"
-                  onClick={() => delHandle(iter.id)}
+                  onClick={() => delHandle(item.id)}
                   className="del btn"
                 >
                   x
@@ -186,9 +220,12 @@ export default function ModalPage({ setOpen }) {
             ))}
             <StyledAdd
               type="button"
-              onClick={(e) => {
-                setArr([...arr, ...tabsArr2()]);
-                e.target.parentElement.scrollLeft += 200;
+              onClick={() => {
+                  const newArray = [...arr, ...tabsArr2()]
+                setArr(newArray);
+                setTabId(newArray[newArray.length-1].id)
+                setTimeout(()=>m.current.childNodes[newArray.length].scrollIntoView(scrollOptions), 0)
+
               }}
             >
               +
@@ -199,7 +236,7 @@ export default function ModalPage({ setOpen }) {
             className="left_arrow"
             type="button"
             onClick={(e) => {
-              e.target.parentElement.scrollLeft -= 200;
+             t.current.scrollLeft -= 300;
             }}
           >
             {`<`}
@@ -209,29 +246,49 @@ export default function ModalPage({ setOpen }) {
             className="right_arrow"
             type="button"
             onClick={(e) => {
-              e.target.parentElement.scrollLeft =
-                e.target.parentElement.scrollLeft + 200;
+              t.current.scrollLeft += 300;
             }}
           >
             {`>`}
           </StyledNav>
         </StyledTabs>
-        <StyledCards tab={tab} arr={arr}>
-          {arr.map((iter, count) => (
-            <li key={count.toString()} className={`tab${iter.id}`}>
-              <div>{iter.value}</div>
+        <StyledCards>
+          {arr.map((item, index) => (
+            <li key={index.toString()} className={item.id === tabId? `visibleTab`: index=== 0 &&  !tabId? "visibleTab": ""}>
+              <div>{item.value}</div>
             </li>
           ))}
         </StyledCards>
       </StyledWrapper>
       <div>
-        <button type="button" onClick={() => setArr([...arr, ...tabsArr2()])}>
+        <button type="button" onClick={() => onData({
+            currentPosition: null,
+            data: [
+                ...arr, ...tabsArr2()
+            ]
+        })}>
           Add arr
         </button>
+          <button type="button" onClick={() => onData({
+              currentPosition: arr.length,
+              data: [
+                  ...arr, ...tabsArr2()
+              ]
+          })}>
+              Add arr with scroll to it
+          </button>
+          <button type="button" onClick={() => onData({
+              currentPosition: getRandomInt(0,Object.keys(arr).length),
+              data: [
+                  ...arr,
+              ]
+          })}>
+              Switch to Random
+          </button>
         <button type="button" onClick={() => setArr([...tabsArr])}>
           Default arr
         </button>
-        <button type="button" onClick={() => setTab(1)}>
+        <button type="button" onClick={() => tabHandle(1)}>
           select
         </button>
       </div>
